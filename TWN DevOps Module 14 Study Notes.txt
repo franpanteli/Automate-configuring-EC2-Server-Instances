@@ -1,0 +1,226 @@
+1 introduction to Boto3 (AWS SDK for Python)
+
+   -> definition  
+     Boto3 is the official AWS SDK (Software Development Kit) for Python It provides an object-oriented API as well as low-level access to AWS services It abstracts the complexity of calling AWS APIs and simplifies the process of integrating AWS services into your Python scripts
+
+   -> purpose  
+     Boto3 simplifies the process of interacting with AWS services Using Python with Boto3 allows developers to automate cloud infrastructure management, automate application deployment, configure services like EC2, S3, RDS, and others, and monitor or analyse cloud services at scale 
+
+   -> why it's needed  
+     -> automation helps automate cloud infrastructure tasks, reducing manual configuration errors and enhancing operational efficiency  
+     -> flexibility developers can build custom solutions to interact with AWS services, perform complex workflows, and combine various AWS features seamlessly  
+     -> scalability with Boto3, developers can handle provisioning, scaling, and management of large cloud infrastructures without manual intervention  
+     -> cost efficiency by automating cloud resource management, organisations can optimise resources and control costs
+
+2 installation & connection
+
+   -> install Boto3  
+     Boto3 can be installed via the Python package manager `pip` Run the following command to install it
+     ```
+     pip install boto3
+     ```
+
+   -> setting up AWS credentials  
+     Before interacting with AWS services, you need AWS credentials These credentials consist of an Access Key ID and a Secret Access Key, which can be configured using the AWS CLI tool
+     ```
+     aws configure
+     ```
+     the CLI will ask you for your AWS credentials (Access Key, Secret Key, default region, and output format) Alternatively, you can manually create credentials files at `~/.aws/credentials` or use environment variables
+
+   -> connecting to AWS services  
+     once installed, you can initialise Boto3 clients to interact with AWS services For example
+     ```
+     import boto3
+     ec2 = boto3.client('ec2')  # Initialises the EC2 client
+     s3 = boto3.client('s3')    # Initialises the S3 client
+     ```
+     Boto3 will automatically load your credentials and use them for authentication when making API calls
+
+3 Python vs Terraform
+
+   -> Terraform  
+     Terraform is an Infrastructure as Code (IaC) tool that allows you to define cloud infrastructure using configuration files Terraform enables the automation of provisioning and managing infrastructure in a declarative manner, ensuring that the infrastructure is always in the desired state However, it does not natively support running complex logic or tasks that are required to interact with services in dynamic ways
+
+   -> Python  
+     Python, on the other hand, provides flexibility to execute custom logic, handle errors, perform data manipulation, and integrate with a variety of services beyond cloud infrastructure While it is not declarative, Python allows you to write detailed scripts for automating processes, monitoring, managing services, or even integrating other third-party APIs into your workflow
+
+   -> comparison  
+     Terraform is great for managing infrastructure in a reproducible and consistent way, while Python allows for broader, customised automation capabilities that go beyond infrastructure and include application logic, data processing, and workflow automation
+
+4 project: EC2 server status checks
+
+   -> objective  
+     automate monitoring of EC2 instances to check their health status, identify if they are in an unhealthy state, and take corrective actions like notifications or restarts
+
+   -> Python script  
+     example Python script that checks the status of EC2 instances
+     ```python
+     import boto3
+
+     ec2 = boto3.client('ec2')
+
+     # Get information about EC2 instances
+     response = ec2.describe_instances()
+
+     for reservation in response['Reservations']:
+         for instance in reservation['Instances']:
+             instance_id = instance['InstanceId']
+             state = instance['State']['Name']
+             print(f"Instance {instance_id} is in state {state}")
+     ```
+     this script pulls the current state of all EC2 instances and prints their status (e.g., running, stopped)
+
+   -> automate scheduling  
+     use cron jobs or Task Scheduler to run the script at regular intervals (e.g., every 5 minutes) to keep the system monitored
+     - for Unix/Linux, add the following to crontab
+       ```
+       */5 * * * * /usr/bin/python3 /path/to/your_script.py
+       ```
+
+   -> taking action  
+     you can extend this script to take action (e.g., rebooting instances that are stuck in a "stopped" state)
+     ```python
+     if state == 'stopped':
+         ec2.start_instances(InstanceIds=[instance_id])
+         print(f"Starting instance {instance_id}")
+     ```
+
+5 project: add tags to EC2 servers
+
+   -> objective  
+     automate the process of adding custom tags (e.g., environment, role) to EC2 instances to improve resource organisation and management
+
+   -> Python script  
+     example Python script to add tags to EC2 instances
+     ```python
+     import boto3
+
+     ec2 = boto3.client('ec2')
+
+     # Tag EC2 instances
+     ec2.create_tags(
+         Resources=['i-xxxxxxxx'],
+         Tags=[{'Key': 'Environment', 'Value': 'Production'}]
+     )
+     ```
+     this script tags the specified instance with a key-value pair, such as `Environment: Production`
+
+   -> Batch processing  
+     to apply tags to multiple instances, you can loop through a list of instance IDs
+     ```python
+     instance_ids = ['i-xxxxxxxx', 'i-yyyyyyyy']
+     ec2.create_tags(
+         Resources=instance_ids,
+         Tags=[{'Key': 'Environment', 'Value': 'Production'}]
+     )
+     ```
+
+6 backup & restore EC2 volumes
+
+   -> objective  
+     automate backups of EC2 volumes (snapshots) and restore them when needed
+
+   -> backup EC2 volumes  
+     example to create snapshots of EC2 volumes
+     ```python
+     snapshot = ec2.create_snapshot(
+         VolumeId='vol-xxxxxxxx', 
+         Description='Backup Snapshot'
+     )
+     print(f"Snapshot ID: {snapshot['SnapshotId']}")
+     ```
+
+   -> restore EC2 volumes  
+     you can restore volumes by creating a new volume from a snapshot and attaching it to an EC2 instance
+     ```python
+     restored_volume = ec2.create_volume(
+         SnapshotId='snap-xxxxxxxx', 
+         AvailabilityZone='us-west-2a'
+     )
+     ec2.attach_volume(
+         InstanceId='i-xxxxxxxx', 
+         VolumeId=restored_volume['VolumeId'], 
+         Device='/dev/sdf'
+     )
+     ```
+
+   -> snapshot cleanup  
+     it's important to delete older snapshots to reduce AWS costs
+     ```python
+     ec2.delete_snapshot(SnapshotId='snap-xxxxxxxx')
+     ```
+
+7 website monitoring and recovery
+
+   -> monitoring  
+     automate website health checks to ensure availability You can monitor HTTP status codes using Python's `requests` library
+     ```python
+     import requests
+
+     response = requests.get('https://yourwebsite.com')
+     if response.status_code != 200:
+         print(f"Website is down! Status code: {response.status_code}")
+     else:
+         print("Website is up!")
+     ```
+
+   -> automated recovery  
+     if the website is down, you can automatically trigger recovery actions, such as restarting a server or application
+     ```python
+     if response.status_code != 200:
+         print("Attempting to restart EC2 instance...")
+         ec2.reboot_instances(InstanceIds=['i-xxxxxxxx'])
+     ```
+
+8 handling errors in Python
+
+   -> error handling  
+     proper error handling ensures that your automation scripts don’t fail unexpectedly Use `try/except` to catch errors and handle them gracefully
+     ```python
+     try:
+         ec2.start_instances(InstanceIds=['i-xxxxxxxx'])
+     except Exception as e:
+         print(f"Error: {str(e)}")
+     ```
+
+   -> logging  
+     Python's `logging` module helps track the flow of the script and catch errors It’s especially useful for long-running automation tasks
+     ```python
+     import logging
+
+     logging.basicConfig(filename='automation.log', level=logging.INFO)
+     logging.info("Started EC2 backup process...")
+     ```
+
+9 automation for large-scale systems
+
+   -> why automate  
+     manually managing large-scale infrastructure is impractical Automation scripts allow for provisioning, configuration, scaling, and monitoring of cloud resources (e.g., EC2, RDS, Lambda) efficiently
+
+   -> Python use cases  
+     Python can automate the management of cloud resources such as scaling EC2 instances, managing S3 storage, performing database backups, deploying applications, and setting up continuous monitoring of cloud environments
+
+10 best practices for Python automation scripts 
+
+   -> version control
+     store your automation scripts in Git for tracking changes and versioning Ensure frequent commits and use branches for different tasks
+
+   -> code reviews 
+     before deploying automation scripts to production, have team members review them to catch errors, optimise logic, and ensure maintainability
+
+   -> error logging & monitoring
+     implement comprehensive error logging and monitoring so you can identify issues early and automate remediation actions
+
+   -> security 
+     never hard-code sensitive credentials in your scripts Use environment variables, AWS Secrets Manager, or IAM roles for securely accessing credentials
+
+11 why Boto3 is essential for DevOps
+
+   -> Infrastructure as Code (IaC)  
+     DevOps engineers rely on Python scripts with Boto3 to automate provisioning, scaling, and configuration management of cloud resources like EC2, S3, RDS, etc
+
+   -> CI/CD pipelines  
+     Python automation integrates into CI/CD pipelines for continuous testing, deployment, and monitoring of applications
+
+   -> automating scaling and maintenance  
+     with Boto3, DevOps engineers can automate scaling policies (e.g., auto-scaling EC2) and ensure cloud resources are correctly maintained (e.g., applying patches, monitoring performance)
